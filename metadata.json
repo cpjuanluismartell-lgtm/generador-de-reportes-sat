@@ -1,0 +1,5 @@
+{
+  "name": "Generador de Reportes SAT",
+  "description": "Aplicación para procesar archivos XML del SAT (Emitidas y Recibidas) y generar reportes en Excel.",
+  "requestFramePermissions": []
+}
