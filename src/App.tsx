@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FileUp, FolderUp, FileSpreadsheet, Loader2, RotateCcw } from 'lucide-react';
 import { CFDI, parseCFDI, parseMetadata } from './lib/cfdiParser';
-import { generateExcel } from './lib/excelGenerator';
+import { generateExcel, ProcessedData } from './lib/excelGenerator';
 
 export default function App() {
   const [inputKey, setInputKey] = useState(Date.now());
@@ -13,7 +13,7 @@ export default function App() {
   const [recibidasMeta, setRecibidasMeta] = useState<File | null>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processedData, setProcessedData] = useState<{ emitidas: CFDI[], recibidas: CFDI[], pagos: CFDI[] } | null>(null);
+  const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
 
   const readFileAsText = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -38,7 +38,12 @@ export default function App() {
     try {
       const emitidas: CFDI[] = [];
       const recibidas: CFDI[] = [];
-      const pagos: CFDI[] = [];
+      const pagosRecibidos: CFDI[] = [];
+      const pagosEmitidos: CFDI[] = [];
+      const notasCreditoRecibidas: CFDI[] = [];
+      const notasCreditoEmitidas: CFDI[] = [];
+      const nominaRecibida: CFDI[] = [];
+      const nominaEmitida: CFDI[] = [];
 
       let emitidasMetadata: Record<string, string> = {};
       if (emitidasMeta) {
@@ -62,12 +67,14 @@ export default function App() {
               if (emitidasMetadata[cfdi.uuid]) {
                 cfdi.estadoSat = emitidasMetadata[cfdi.uuid];
               }
-              if (cfdi.tipoDeComprobante === 'I' || cfdi.tipoDeComprobante === 'E') {
+              if (cfdi.tipoDeComprobante === 'I') {
                 emitidas.push(cfdi);
+              } else if (cfdi.tipoDeComprobante === 'E') {
+                notasCreditoEmitidas.push(cfdi);
               } else if (cfdi.tipoDeComprobante === 'P') {
-                // Pagos emitidos (opcional, pero los agregamos a pagos si es necesario)
-                // El reporte de ejemplo muestra "PAGOS RECIBIDOS" con RFC Emisor = Banco.
-                // Eso significa que son CFDI tipo P que el usuario RECIBIÓ.
+                pagosEmitidos.push(cfdi);
+              } else if (cfdi.tipoDeComprobante === 'N') {
+                nominaEmitida.push(cfdi);
               }
             }
           }
@@ -84,17 +91,24 @@ export default function App() {
               if (recibidasMetadata[cfdi.uuid]) {
                 cfdi.estadoSat = recibidasMetadata[cfdi.uuid];
               }
-              if (cfdi.tipoDeComprobante === 'I' || cfdi.tipoDeComprobante === 'E') {
+              if (cfdi.tipoDeComprobante === 'I') {
                 recibidas.push(cfdi);
+              } else if (cfdi.tipoDeComprobante === 'E') {
+                notasCreditoRecibidas.push(cfdi);
               } else if (cfdi.tipoDeComprobante === 'P') {
-                pagos.push(cfdi);
+                pagosRecibidos.push(cfdi);
+              } else if (cfdi.tipoDeComprobante === 'N') {
+                nominaRecibida.push(cfdi);
               }
             }
           }
         }
       }
 
-      setProcessedData({ emitidas, recibidas, pagos });
+      setProcessedData({ 
+        emitidas, recibidas, pagosRecibidos, pagosEmitidos, 
+        notasCreditoRecibidas, notasCreditoEmitidas, nominaRecibida, nominaEmitida 
+      });
     } catch (error) {
       console.error("Error processing files:", error);
       alert("Hubo un error al procesar los archivos. Revisa la consola para más detalles.");
@@ -105,7 +119,7 @@ export default function App() {
 
   const handleExport = () => {
     if (processedData) {
-      generateExcel(processedData.emitidas, processedData.recibidas, processedData.pagos);
+      generateExcel(processedData);
     }
   };
 
@@ -219,18 +233,22 @@ export default function App() {
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div className="p-4 bg-blue-50 rounded-lg">
-                <p className="text-2xl font-bold text-blue-700">{processedData.emitidas.length}</p>
-                <p className="text-sm text-blue-600 font-medium">Emitidas</p>
+                <p className="text-2xl font-bold text-blue-700">{processedData.emitidas.length + processedData.recibidas.length}</p>
+                <p className="text-sm text-blue-600 font-medium">Facturas</p>
               </div>
               <div className="p-4 bg-green-50 rounded-lg">
-                <p className="text-2xl font-bold text-green-700">{processedData.recibidas.length}</p>
-                <p className="text-sm text-green-600 font-medium">Recibidas</p>
+                <p className="text-2xl font-bold text-green-700">{processedData.pagosEmitidos.length + processedData.pagosRecibidos.length}</p>
+                <p className="text-sm text-green-600 font-medium">Pagos</p>
               </div>
               <div className="p-4 bg-purple-50 rounded-lg">
-                <p className="text-2xl font-bold text-purple-700">{processedData.pagos.length}</p>
-                <p className="text-sm text-purple-600 font-medium">Pagos Recibidos</p>
+                <p className="text-2xl font-bold text-purple-700">{processedData.notasCreditoEmitidas.length + processedData.notasCreditoRecibidas.length}</p>
+                <p className="text-sm text-purple-600 font-medium">Notas de Crédito</p>
+              </div>
+              <div className="p-4 bg-orange-50 rounded-lg">
+                <p className="text-2xl font-bold text-orange-700">{processedData.nominaEmitida.length + processedData.nominaRecibida.length}</p>
+                <p className="text-sm text-orange-600 font-medium">Nóminas</p>
               </div>
             </div>
           </div>

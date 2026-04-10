@@ -10,8 +10,10 @@ export interface CFDI {
   rfcReceptor: string;
   nombreReceptor: string;
   iva16: number;
+  ieps: number;
   retIva: number;
   retIsr: number;
+  isrNomina: number;
   montoPago: number;
   uuidRel: string;
   estadoSat: string;
@@ -43,6 +45,7 @@ export function parseCFDI(xmlString: string): CFDI | null {
   const nombreReceptor = getAttr(receptor, 'Nombre') || '';
 
   let iva16 = 0;
+  let ieps = 0;
   let retIva = 0;
   let retIsr = 0;
 
@@ -63,6 +66,8 @@ export function parseCFDI(xmlString: string): CFDI | null {
           const importe = parseFloat(getAttr(traslados[i], 'Importe') || '0');
           if (imp === '002' && tasa === '0.160000') {
               iva16 += importe;
+          } else if (imp === '003') {
+              ieps += importe;
           }
       }
 
@@ -94,6 +99,25 @@ export function parseCFDI(xmlString: string): CFDI | null {
           }
       }
       uuidRel = uuids.join(', ');
+  } else if (tipoDeComprobante === 'E') {
+      const relacionados = xmlDoc.getElementsByTagName('cfdi:CfdiRelacionado');
+      let uuids: string[] = [];
+      for(let i=0; i<relacionados.length; i++) {
+          const id = getAttr(relacionados[i], 'UUID');
+          if (id) uuids.push(id);
+      }
+      uuidRel = uuids.join(', ');
+  }
+
+  let isrNomina = 0;
+  if (tipoDeComprobante === 'N') {
+      const deducciones = xmlDoc.getElementsByTagName('nomina12:Deduccion');
+      for(let i=0; i<deducciones.length; i++) {
+          const tipo = getAttr(deducciones[i], 'TipoDeduccion');
+          if (tipo === '002') {
+              isrNomina += parseFloat(getAttr(deducciones[i], 'Importe') || '0');
+          }
+      }
   }
 
   return {
@@ -108,8 +132,10 @@ export function parseCFDI(xmlString: string): CFDI | null {
       rfcReceptor,
       nombreReceptor,
       iva16,
+      ieps,
       retIva,
       retIsr,
+      isrNomina,
       montoPago,
       uuidRel,
       estadoSat: 'Vigente' // Default if no metadata
